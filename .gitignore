@@ -1,0 +1,27 @@
+# Never commit real secrets
+
+.env
+*.key
+*.pem
+*.crt
+*password*
+*secret*
+*token*
+*apikey*
+*serviceAccount*
+
+# Keep real configs out; commit only sanitized examples
+tech-projects/siem-lab/configs/**/*.yml
+!tech-projects/siem-lab/configs/**/.keep
+!tech-projects/siem-lab/configs/**/*.exmaple.yml
+
+# Misc
+*.pcap
+.DS_Store
+.idea/
+.vscode/
+
+# This ensure:
+#	All certs/keys/password files stay local.
+#	Your real configs won't be committed, but you can still share [.example.yml] versions.
+#	Empty folders won't get pruned [thanks to .keep].
