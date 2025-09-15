@@ -1,0 +1,9 @@
+# minimal sketch - adapt to your install
+af-packet:
+  - interface: eth0
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: /var/log/suricata/eve.json
+      type: [alert, dns, http, tls, flow]
