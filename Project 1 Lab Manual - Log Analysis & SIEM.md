@@ -1,360 +1,280 @@
-Project 1 Lab Manual - Log Analysis & SIEM (Free & On-Prem)
-0) Outcome & Success Criteria
+## Project 1 Lab Manual - Log Analysis & SIEM (Free & On-Prem)
 
+# 0) Outcome & Success Criteria
 By the end you will:
+  -  Mirror VLAN traffic to a monitoring box.
+  -  Run Zeek (network metadata) and Suricata (IDS) on the monitor.
+  -  Ingest Zeek & Suricata logs into ELK (Elasticsearch + Kibana) via Filebeat modules.
+  -  Build dashboards and confirm alerts from simulated attacks (SSH brute force, DNS tunneling, simple phishing beacon).
+  -  Document detection → investigation → response steps with light MITRE ATT&CK and NIST mapping.
 
-Mirror VLAN traffic to a monitoring box.
-
-Run Zeek (network metadata) and Suricata (IDS) on the monitor.
-
-Ingest Zeek & Suricata logs into ELK (Elasticsearch + Kibana) via Filebeat modules.
-
-Build dashboards and confirm alerts from simulated attacks (SSH brute force, DNS tunneling, simple phishing beacon).
-
-Document detection → investigation → response steps with light MITRE ATT&CK and NIST mapping.
-
-You’ll keep everything local & free (no Splunk, no cloud trials).
-
-1) Reference Architecture (your gear)
-
-Cisco SG250-10P (switch)
-
-SPAN/Port Mirroring: mirror selected VLANs/ports → ge9 (monitoring).
-
-OPNsense (router/firewall)
-
-Normal routing/DHCP for VLAN10/20/30/40/99 (as you already have).
-
-Monitoring box (preferably a dedicated PC/VM with 2+ CPU cores, 8+ GB RAM):
-
-OS: Ubuntu Server 22.04 LTS (recommended) or Debian 12.
-
-Runs Zeek, Suricata, Filebeat, Elasticsearch, Kibana (all on the same host is fine to start).
-
-NIC connected to ge9 on the SG250.
-
-Test endpoints
-
-One Linux VM (Ubuntu) and/or Windows 10 VM on your VLANs to generate benign and malicious test traffic.
-
-2) Configure Switch Port Mirroring (SG250 GUI, no CLI needed)
-
-Log in to SG250 web GUI.
-
-Go: Administration → Diagnostics → Port and VLAN Mirroring (or Port Management → Port Mirroring depending on firmware).
-
-Create Session:
-
-Source: pick the interfaces or VLANs you want to monitor (e.g., trunk to Vault1211, or specific access ports).
-
-Destination: set ge9 (your monitor port).
-
-Direction: both (ingress + egress).
-
-Apply/Save.
-
-Plug the monitoring box NIC into ge9.
-
-Tip: Start with mirroring the trunk to your router (ge1) to see broad traffic; later narrow to VLANs for focused detection.
-
-3) Prepare the Monitoring Host
-3.1 OS baseline (Ubuntu 22.04)
-sudo apt update && sudo apt -y upgrade
-sudo apt -y install curl wget git unzip jq net-tools htop
-# Optional but handy:
-sudo timedatectl set-ntp true
-
-3.2 Set the monitor NIC to promiscuous mode
-
-Assume the interface is enp3s0 (check with ip a):
-
-sudo ip link set enp3s0 promisc on
+*You’ll keep everything local & free (no Splunk, no cloud trials).*
 
 
-Make it persistent (systemd unit or add to network config later once stable).
+# 1) Reference Architecture (your gear may vary)
+  -  Managed Switch
+  -  SPAN/Port Mirroring: mirror selected VLANs/ports → port # (monitoring).
+  -  OPNsense (router/firewall)
+  -  Access Point [OpenWRT]; VLAN10/VLAN../.../ 
+  -  Monitoring box (preferably a dedicated PC/VM with 2+ CPU cores, 8+ GB RAM):
+  -  OS: Ubuntu Server 22.04 LTS (recommended) or Debian 12.
 
-4) Install Elasticsearch & Kibana (self-hosted, free)
+*Runs Zeek, Suricata, Filebeat, Elasticsearch, Kibana (all on the same host is fine to start).*
+
+
+# 2) Configure Managed Switch Port for Mirroring
+
+
+# 3) Prepare the Monitoring Host
+  -  3.1 OS baseline (Ubuntu 22.04)
+    -  sudo apt update && sudo apt -y upgrade
+    -  sudo apt -y install curl wget git unzip jq net-tools htop
+     ***Optional but handy:***
+     -  sudo timedatectl set-ntp true
+
+  -  3.2 Set the monitor NIC to promiscuous mode
+      -  Assume the interface is "enp3s0" (check with ip a):
+          -  sudo ip link set enp3s0 promisc on
+
+
+# 4) Install Elasticsearch & Kibana (self-hosted, free)
 
 Elastic 8.x includes security by default (TLS, built-in users). We’ll do a minimal secure single-node.
 
-4.1 Install Java (Elastic bundles its own now, but ensure dependencies)
-sudo apt -y install apt-transport-https
-wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elastic.gpg
-echo "deb [signed-by=/usr/share/keyrings/elastic.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | \
-  sudo tee /etc/apt/sources.list.d/elastic-8.x.list
-sudo apt update
+  -  4.1 Install Java (Elastic bundles its own now, but ensure dependencies)
+      -  sudo apt -y install apt-transport-https
+      -  wget -qO - https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /usr/share/keyrings/elastic.gpg
+      -  echo "deb [signed-by=/usr/share/keyrings/elastic.gpg] https://artifacts.elastic.co/packages/8.x/apt stable main" | \\
 
-4.2 Install Elasticsearch & Kibana
-sudo apt -y install elasticsearch kibana
+sudo tee /etc/apt/sources.list.d/elastic-8.x.list
+  -  sudo apt update
 
-4.3 Minimal Elasticsearch config (single node)
+  -  4.2 Install Elasticsearch & Kibana
+      -  sudo apt -y install elasticsearch kibana
 
-Edit /etc/elasticsearch/elasticsearch.yml:
+  -  4.3 Minimal Elasticsearch config (single node)
+      -  Edit /etc/elasticsearch/elasticsearch.yml:
 
-cluster.name: homelab-elk
-node.name: node-1
-path.data: /var/lib/elasticsearch
-path.logs: /var/log/elasticsearch
-network.host: 0.0.0.0
-discovery.type: single-node
+cluster.name: homelab-elk                                                                                                                                          
+node.name: node-1                                                                                                                                                  
+path.data: /var/lib/elasticsearch                                                                                                                                  
+path.logs: /var/log/elasticsearch                                                                                                                                  
+network.host: 0.0.0.0                                                                                                                                              
+discovery.type: single-node                                                                                                                                        
 xpack.security.enabled: true
 
 
-Start & enable:
+  -  Start & enable:
+      -  sudo systemctl enable --now elasticsearch
 
-sudo systemctl enable --now elasticsearch
+  -  Get the auto-generated elastic user password:
+      -  sudo /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -i
+        
+***Save it securely (password manager / .env not in git)***
 
+  -  4.4 Kibana setup
+      -  Edit /etc/kibana/kibana.yml:
 
-Get the auto-generated elastic user password:
+server.host: "0.0.0.0"                                                                                                                                        
+elasticsearch.hosts: ["https://localhost:9200"]                                                                                                        
+elasticsearch.username: "kibana_system"                                                                                                                      
+*Create a Kibana enrollment token (or set the password)*
 
-sudo /usr/share/elasticsearch/bin/elasticsearch-reset-password -u elastic -i
-# Save it securely (password manager / .env not in git)
 
-4.4 Kibana setup
+  -  Initialize Kibana:
+      -  sudo systemctl enable --now kibana
 
-Edit /etc/kibana/kibana.yml:
 
-server.host: "0.0.0.0"
-elasticsearch.hosts: ["https://127.0.0.1:9200"]
-elasticsearch.username: "kibana_system"
-# Create a Kibana enrollment token (or set the password)
+*Visit https://<monitor_host_ip>:5601 → follow setup prompts to connect to Elasticsearch (you may use the provided enrollment flow). Create your Kibana login. Keep RBAC on (default in 8.x).*
 
 
-Initialize Kibana:
+# 5) Install Zeek (network metadata)
+  -  sudo apt -y install zeek
+  -  Verify the interface (the mirrored one):
+      -  sudo zeek -v
 
-sudo systemctl enable --now kibana
+  -  Basic run (test):
+      -  sudo zeek -i enp3s0
 
+***Ctrl+C to stop; logs in /opt/zeek/logs or /var/log/zeek depending on distro***
 
-Visit https://<monitor_host_ip>:5601 → follow setup prompts to connect to Elasticsearch (you may use the provided enrollment flow). Create your Kibana login. Keep RBAC on (default in 8.x).
+  -  Set Zeek to service mode (systemd unit varies by distro)
 
-5) Install Zeek (network metadata)
-sudo apt -y install zeek
-# Verify the interface (the mirrored one):
-sudo zeek -v
+***Log location (default): /opt/zeek/logs/current/ (files like conn.log, dns.log, http.log, etc.)***
 
 
-Basic run (test):
+# 6) Install Suricata (IDS with ET Open rules)
+  -  sudo apt -y install suricata
+  -  Enable AF-Packet (best for mirrors) in /etc/suricata/suricata.yaml:
+      - set the interface to enp3s0
+      - enable eve.json output
+  -  sudo suricata-update  [pulls Emerging Threats Open rules (free)]
+  -  sudo systemctl enable --now suricata
 
-sudo zeek -i enp3s0
-# Ctrl+C to stop; logs in /opt/zeek/logs or /var/log/zeek depending on distro
+***Key outputs: /var/log/suricata/eve.json (alerts, DNS, HTTP, TLS metadata, etc.)***
 
 
-Set Zeek to service mode (systemd unit varies by distro). On Ubuntu, you can use zeekctl:
+# 7) Install Filebeat & enable Zeek/Suricata modules
+  -  sudo apt -y install filebeat
+  -  sudo filebeat modules enable zeek suricata
 
-sudo apt -y install zeekctl
-sudo zeekctl deploy
+  -  7.1 Configure Zeek module
+      -  Edit /etc/filebeat/modules.d/zeek.yml and set log paths, e.g.:
+                                                                                                                                                               
+\- module: zeek                                                                                                                                          
+&nbsp;&nbsp;connection:                                                                                                                                      
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enabled: true                                                                                                      
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.paths: ["/opt/zeek/logs/current/conn.log"]                                                                      
+&nbsp;&nbsp;dns:                                                                                                                                
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enabled: true                                                                                                      
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.paths: ["/opt/zeek/logs/current/dns.log"]                                                                                  
+&nbsp;&nbsp;http:                                                                                                                              
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enabled: true                                                                                                     
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.paths: ["/opt/zeek/logs/current/http.log"]                                                          
+&nbsp;&nbsp;ssl                                                                                                                           
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enabled: true                                                                                                      
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.paths: ["/opt/zeek/logs/current/ssl.log"]                                                                           
+&nbsp;&nbsp;notice:                                                                                                                        
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enabled: true                                                                                                      
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.paths: ["/opt/zeek/logs/current/notice.log"]
 
 
-(If zeekctl isn’t in repo, install from source or use zkg; alternatively run Zeek via systemd ExecStart with -i enp3s0.)
+  -  7.2 Configure Suricata module
+      -  Edit /etc/filebeat/modules.d/suricata.yml:
 
-Log location (default): /opt/zeek/logs/current/ (files like conn.log, dns.log, http.log, etc.)
+\- module: suricata                                                                                                                                  
+&nbsp;&nbsp;eve:                                                                                                        
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enabled: true                                                                              
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;var.paths: ["/var/log/suricata/eve.json"]
 
-6) Install Suricata (IDS with ET Open rules)
-sudo apt -y install suricata
-# Enable AF-Packet (best for mirrors) in /etc/suricata/suricata.yaml:
-# - set the interface to enp3s0
-# - enable eve.json output
-sudo suricata-update  # pulls Emerging Threats Open rules (free)
-sudo systemctl enable --now suricata
 
+  -  7.3 Point Filebeat to Elasticsearch
+      -  Edit /etc/filebeat/filebeat.yml:
 
-Key outputs: /var/log/suricata/eve.json (alerts, DNS, HTTP, TLS metadata, etc.)
+output.elasticsearch:                                                                                                                             
+&nbsp;&nbsp;&nbsp;&nbsp;hosts: ["https://localhost:9200"]                                                                          
+&nbsp;&nbsp;&nbsp;&nbsp;username: "elastic"                                                                                          
+&nbsp;&nbsp;&nbsp;&nbsp;password: "<YOUR_ELASTIC_PASSWORD>"                                                                                  
+&nbsp;&nbsp;&nbsp;&nbsp;ssl.verification_mode: full                                                                                                    
+setup.kibana:                                                                                                                                                    
+&nbsp;&nbsp;&nbsp;&nbsp;host: "https://localhost:5601"
 
-7) Install Filebeat & enable Zeek/Suricata modules
-sudo apt -y install filebeat
-sudo filebeat modules enable zeek suricata
 
-7.1 Configure Zeek module
+***Remember to not to hardcode user/pass; for ease of installation it has been hardcoded above***
 
-Edit /etc/filebeat/modules.d/zeek.yml and set log paths, e.g.:
 
-- module: zeek
-  connection:
-    enabled: true
-    var.paths: ["/opt/zeek/logs/current/conn.log"]
-  dns:
-    enabled: true
-    var.paths: ["/opt/zeek/logs/current/dns.log"]
-  http:
-    enabled: true
-    var.paths: ["/opt/zeek/logs/current/http.log"]
-  ssl:
-    enabled: true
-    var.paths: ["/opt/zeek/logs/current/ssl.log"]
-  notice:
-    enabled: true
-    var.paths: ["/opt/zeek/logs/current/notice.log"]
+  -  7.4 Load templates & dashboards; start Filebeat
+      -  sudo filebeat setup
+      -  sudo systemctl enable --now filebeat
 
-7.2 Configure Suricata module
 
-Edit /etc/filebeat/modules.d/suricata.yml:
+*This loads the Zeek and Suricata ingest pipelines and Kibana dashboards automatically.*
 
-- module: suricata
-  eve:
-    enabled: true
-    var.paths: ["/var/log/suricata/eve.json"]
 
-7.3 Point Filebeat to Elasticsearch
+# 8) Verify Ingestion & Dashboards
+  -  Open Kibana → Discover:
+      -  Indices like filebeat-* should start receiving documents.
+  -  Open Dashboards:
+      -  Search for “[Filebeat] Suricata” and “[Filebeat] Zeek” dashboards.
 
-Edit /etc/filebeat/filebeat.yml:
+*You should see DNS/HTTP flows (Zeek) and alerts/flows (Suricata).*
 
-output.elasticsearch:
-  hosts: ["https://127.0.0.1:9200"]
-  username: "elastic"
-  password: "<YOUR_ELASTIC_PASSWORD>"
-  ssl.verification_mode: full
-setup.kibana:
-  host: "https://127.0.0.1:5601"
 
-7.4 Load templates & dashboards; start Filebeat
-sudo filebeat setup
-sudo systemctl enable --now filebeat
+# 9) Generate Test Traffic (safe, local)
+  -  9.1 SSH brute force (ATT&CK T1110)
+      -  From a test Linux VM, attempt bad passwords (against another lab VM that runs SSH):
+          -  for i in {1..25}; do ssh user@TARGET-IP -o PreferredAuthentications=password -o PubkeyAuthentication=no "exit"; done
+          -  Enter wrong passwords when prompted, or automate with hydra (against your own host)
+      -  sudo apt -y install hydra
+          -  hydra -l user -P /usr/share/wordlists/rockyou.txt ssh://TARGET-IP -t 4 -V -f
 
 
-This loads the Zeek and Suricata ingest pipelines and Kibana dashboards automatically.
+***Expectations:***                                                                                                                                     
+&nbsp;&nbsp;*Zeek: spikes in conn.log, multiple failed auth sequences (if auth banners visible).*                                                          
+&nbsp;&nbsp;*Suricata: ET OPEN signatures may flag SSH brute force patterns.*
 
-8) Verify Ingestion & Dashboards
+  -  9.2 DNS tunneling behavior (ATT&CK T1071.004)
+      -  Install iodine or dnscat2 on lab-only names (no real domain needed for basic noise):
+          -  Simpler: generate abnormal DNS by querying random subdomains:
+              -  for i in {1..200}; do dig $(head -c 8 /dev/urandom | base64 | tr -dc a-z | head -c 8).example.local; done
 
-Open Kibana → Discover:
 
-Indices like filebeat-* should start receiving documents.
+***Expectations:***                                                                                                                                                
+&nbsp;&nbsp;*Zeek dns.log shows high entropy, many NXDOMAINs.*                                                                                            
+&nbsp;&nbsp;*Suricata may flag excessive DNS queries (depends on rules).*
 
-Open Dashboards:
+  -  9.3 Suspicious HTTP beacon
+      -  From a test VM:
+          -  while true; do curl -A "Mozilla/5.0" http://TARGET-WEB-SVC/pixel.gif >/dev/null 2>&1; sleep 5; done
 
-Search for “[Filebeat] Suricata” and “[Filebeat] Zeek” dashboards.
 
-You should see DNS/HTTP flows (Zeek) and alerts/flows (Suricata).
+***Expectations:***                                                                                                                                              
+&nbsp;&nbsp;*Zeek http.log shows periodic same-host GETs (beacon-like).*                                                                                           
+&nbsp;&nbsp;*You can create a simple Kibana lens chart to visualize periodicity.*
 
-9) Generate Test Traffic (safe, local)
-9.1 SSH brute force (ATT&CK T1110)
 
-From a test Linux VM, attempt bad passwords (against another lab VM that runs SSH):
+# 10) Build Your Kibana Views (analyst workflow)
+  -  Dashboards:
+      -  “SOC Home”:
+          -  Top Suricata Alerts (by signature)
+          -  Zeek DNS: Top queried domains, NXDOMAIN ratio, entropy (scripted field optional)
+          -  Zeek Connections: Top talkers, unusual ports
+      -  “SSH Brute Force”:
+          -  Count of failed attempts over time; Top source IPs; Target hosts
+      -  Saved Searches:
+          -  event.module:suricata AND suricata.eve.alert.severity:>=2
+          -  event.module:zeek AND zeek.dns.rcode:NXDOMAIN
 
-for i in {1..25}; do ssh user@TARGET-IP -o PreferredAuthentications=password -o PubkeyAuthentication=no "exit"; done
-# Enter wrong passwords when prompted, or automate with hydra (against your own host)
-# sudo apt -y install hydra
-# hydra -l user -P /usr/share/wordlists/rockyou.txt ssh://TARGET-IP -t 4 -V -f
+# 11) Triage & Documentation (CySA+ + DoD-friendly)
+  -  Create a repo folder tech-projects/siem-lab/ with:
 
+/docs/                                                                                                                                                    
+&nbsp;&nbsp;runbook.md                                                                                                                                  
+&nbsp;&nbsp;detections.md                                                                                                      
+&nbsp;&nbsp;playbook_ssh_bruteforce.md                                                                                                
+&nbsp;&nbsp;mapping_mitre_nist.md
 
-Expectations:
 
-Zeek: spikes in conn.log, multiple failed auth sequences (if auth banners visible).
+/configs/                                                                                                                                  
+&nbsp;&nbsp;filebeat/*.yml                                                                                                                    
+&nbsp;&nbsp;zeek/*.cfg                                                                                                            
+&nbsp;&nbsp;suricata/suricata.yaml                                                                                                            
+&nbsp;&nbsp;elastic/elasticsearch.yml                                                                                                                
+&nbsp;&nbsp;kibana/kibana.yml
 
-Suricata: ET OPEN signatures may flag SSH brute force patterns.
 
-9.2 DNS tunneling behavior (ATT&CK T1071.004)
+  -  Include in mapping_mitre_nist.md:
+      -  MITRE ATT&CK
+      -  SSH brute force → T1110
+      -  DNS tunneling → T1071.004
+      -  NIST 800-53
 
-Install iodine or dnscat2 on lab-only names (no real domain needed for basic noise):
 
-Simpler: generate abnormal DNS by querying random subdomains:
+*AU-6 (Audit Review) → You review logs & dashboards*
 
-for i in {1..200}; do dig $(head -c 8 /dev/urandom | base64 | tr -dc a-z | head -c 8).example.local; done
 
+*SI-4 (System Monitoring) → Suricata + Zeek monitoring controls*
 
-Expectations:
 
-Zeek dns.log shows high entropy, many NXDOMAINs.
+  -  Process
+      -  Detection → Investigation (queries) → Containment (lab action) → Lessons learned (update dashboards/rules)
 
-Suricata may flag excessive DNS queries (depends on rules).
+  -  Important hygiene:
+      -  Store passwords in a local password manager.
+      -  If you keep configs in git, exclude secrets via .gitignore and sample .env.example.
 
-9.3 Suspicious HTTP beacon
+# 12) Stretch Goals (still free)
+  -  Enrich Zeek DNS with local threat-feeds (plain-text domains/IPs you maintain in git; tag hits in Filebeat ingest).
+  -  Custom Suricata rules for lab IoCs (create a local.rules file and include it in Suricata).
+  -  Packet capture pivots: run tcpdump -i enp3s0 -w /tmp/ssh-bf.pcap during tests and validate with Wireshark → show “packet-to-log” correlation.
 
-From a test VM:
+    
+# 13) Acceptance Checklist
 
-while true; do curl -A "Mozilla/5.0" http://TARGET-WEB-SVC/pixel.gif >/dev/null 2>&1; sleep 5; done
-
-
-Expectations:
-
-Zeek http.log shows periodic same-host GETs (beacon-like).
-
-You can create a simple Kibana lens chart to visualize periodicity.
-
-10) Build Your Kibana Views (analyst workflow)
-
-Dashboards:
-
-“SOC Home”:
-
-Top Suricata Alerts (by signature)
-
-Zeek DNS: Top queried domains, NXDOMAIN ratio, entropy (scripted field optional)
-
-Zeek Connections: Top talkers, unusual ports
-
-“SSH Brute Force”:
-
-Count of failed attempts over time; Top source IPs; Target hosts
-
-Saved Searches:
-
-event.module:suricata AND suricata.eve.alert.severity:>=2
-
-event.module:zeek AND zeek.dns.rcode:NXDOMAIN
-
-11) Triage & Documentation (CySA+ + DoD-friendly)
-
-Create a repo folder tech-projects/siem-lab/ with:
-
-/docs/
-  runbook.md
-  detections.md
-  playbook_ssh_bruteforce.md
-  mapping_mitre_nist.md
-/configs/
-  filebeat/*.yml
-  zeek/*.cfg
-  suricata/suricata.yaml
-  elastic/elasticsearch.yml
-  kibana/kibana.yml
-
-
-Include in mapping_mitre_nist.md:
-
-MITRE ATT&CK
-
-SSH brute force → T1110
-
-DNS tunneling → T1071.004
-
-NIST 800-53
-
-AU-6 (Audit Review) → You review logs & dashboards
-
-SI-4 (System Monitoring) → Suricata + Zeek monitoring controls
-
-Process
-
-Detection → Investigation (queries) → Containment (lab action) → Lessons learned (update dashboards/rules)
-
-Important hygiene:
-
-Store passwords in a local password manager.
-
-If you keep configs in git, exclude secrets via .gitignore and sample .env.example.
-
-12) Stretch Goals (still free)
-
-Enrich Zeek DNS with local threat-feeds (plain-text domains/IPs you maintain in git; tag hits in Filebeat ingest).
-
-Custom Suricata rules for lab IoCs (create a local.rules file and include it in Suricata).
-
-Packet capture pivots: run tcpdump -i enp3s0 -w /tmp/ssh-bf.pcap during tests and validate with Wireshark → show “packet-to-log” correlation (interview gold).
-
-13) Acceptance Checklist
-
- SG250 mirroring to ge9 confirmed.
-
- Zeek logs (conn, dns, http, ssl) rotating in .../logs/current.
-
- Suricata running, ET Open rules loaded, eve.json filling.
-
- Filebeat shipping to Elasticsearch; Kibana dashboards visible.
-
- SSH brute force test produces visible signals (Zeek + Suricata).
-
- DNS anomaly test visible in Zeek DNS (NXDOMAIN / high volume).
-
- At least one Saved Search and one custom Lens viz created.
-
- Runbook + ATT&CK/NIST mapping written in /docs.
+[&nbsp;&nbsp;] SG250 mirroring to ge9 confirmed.                                                                                                      
+[&nbsp;&nbsp;] Zeek logs (conn, dns, http, ssl) rotating in .../logs/current.                                                                    
+[&nbsp;&nbsp;] Suricata running, ET Open rules loaded, eve.json filling.                                                                                           
+[&nbsp;&nbsp;] Filebeat shipping to Elasticsearch; Kibana dashboards visible.                                                                      
+[&nbsp;&nbsp;] SSH brute force test produces visible signals (Zeek + Suricata).                                                                    
+[&nbsp;&nbsp;] DNS anomaly test visible in Zeek DNS (NXDOMAIN / high volume).                                                                          
+[&nbsp;&nbsp;] At least one Saved Search and one custom Lens viz created.[&nbsp;&nbsp;]Runbook + ATT&CK/NIST mapping written in /docs.
