@@ -106,18 +106,18 @@ Elastic 8.x includes security by default (TLS, built-in users). We’ll do a min
 
 # 13) Acceptance Checklist
 
- [  ] SG250 mirroring to ge9 confirmed.
+ [&nbsp;&nbsp;] SG250 mirroring to ge9 confirmed.
 
- [  ] Zeek logs (conn, dns, http, ssl) rotating in .../logs/current.
+ [&nbsp;&nbsp;] Zeek logs (conn, dns, http, ssl) rotating in .../logs/current.
 
- [  ] Suricata running, ET Open rules loaded, eve.json filling.
+ [&nbsp;&nbsp;] Suricata running, ET Open rules loaded, eve.json filling.
 
- [  ] Filebeat shipping to Elasticsearch; Kibana dashboards visible.
+ [&nbsp;&nbsp;] Filebeat shipping to Elasticsearch; Kibana dashboards visible.
 
- [  ] SSH brute force test produces visible signals (Zeek + Suricata).
+ [&nbsp;&nbsp;] SSH brute force test produces visible signals (Zeek + Suricata).
 
- [  ] DNS anomaly test visible in Zeek DNS (NXDOMAIN / high volume).
+ [&nbsp;&nbsp;] DNS anomaly test visible in Zeek DNS (NXDOMAIN / high volume).
 
- [  ] At least one Saved Search and one custom Lens viz created.
+ [&nbsp;&nbsp;] At least one Saved Search and one custom Lens viz created.
 
- [  ] Runbook + ATT&CK/NIST mapping written in /docs.
+ [&nbsp;&nbsp;] Runbook + ATT&CK/NIST mapping written in /docs.
