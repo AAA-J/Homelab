@@ -31,7 +31,7 @@
 ✅ Covers: CySA+ Domain 2 (Software & System Security / Threat Detection Engineering) + CSSP Analyst requirement (creating and tuning detections).
 
 
-# Project 4 (New): Vulnerability Management & Risk Mitigation
+# Project 4: Vulnerability Management & Risk Mitigation
 ***Skills: Vulnerability scanning, risk assessment, remediation planning.***
   -  Run OpenVAS/Greenbone Community Edition (completely free) inside your homelab.
   -  Scan a test machine (Windows 10 VM + Ubuntu VM) for missing patches and misconfigurations.
