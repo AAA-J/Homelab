@@ -1,5 +1,8 @@
 
-# 2025-09
-- Ways Enrich data;
-  - crosscheck known data e.g., viirustotal
-- How to include A.I.
+# 2025
+  -  September
+      - Ways Enrich data;
+          - crosscheck known data e.g., viirustotal
+      - How to include A.I.
+  -  October
+      -  Wazuh
